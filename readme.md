@@ -7,4 +7,3 @@
     - homework --> write interpreter to implement a programming language (function closures)
 - week3 
     - impact of static type system 
-    - 
