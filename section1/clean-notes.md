@@ -155,7 +155,7 @@ approach 2 - **lazy evaluation** = if we take a conditional we evaluate e1 but w
 
 > concept of **promises** | **lazy-evaluation** | **call-by-need**
 >
-> via mutation save the result of computing the first time in a pair so we ensure to only do the computation once
+> via **mutation** save the result of computing the first time in a pair so we ensure to only do the computation once
 >
 > we can take two functions to enforce lazy evaluation and make sure that we do not make heavy computations unnecessarily
 >
@@ -192,5 +192,195 @@ approach 2 - **lazy evaluation** = if we take a conditional we evaluate e1 but w
 (define nats
 	(letrec ([f (lambda (x) (cons x (lambda () (f (+ x 	1)))))])
  		(lambda () (f 1))))
+
+(define (number-until stream tester)
+	(letrec ([f (lambda (stream ans)
+		(let ([pr (stream)])
+			(if (tester (car pr))
+				ans
+				(f (cdr pr) (+ ans 1)))))])
+	(f stream 1)))
+;fn tells us how to create the nex 
+;arg gives us the first arg of the stream
+(define (stream-maker fn arg) 
+	(letrec ([f (lambda (x)
+					(cons x (lambda () (f (fn x arg)))))])
+      				; this gives a pair with curr element 
+      				; and a thunk with a function ready to continue stremaing 
+			(lambda () (f arg))))
+```
+
+## memoization
+
+idea: we have a function without side-effects, if this function is called with the same arguments then it will produce the same result. Therefore we can create a **memo-table** in which we save the results. This table will be used to look up result for certain arguments.
+
+implementation: use mutation to create a memo-table represented by a list with pairs each pair consisting of args and result. 
+
+```scheme
+(define fibo
+	(letrec {[memo-table null]
+      		 [f (lambda (x)
+                  (let ([ans (assoc x memo-table)])
+                    (if ans
+                        (cdr ans)
+                        (let ([new-ans (if (or (= x1) (= x 2))
+                                           1
+                                           (X (f (- x 1))
+                                              (f (- x 2))))])
+                          (begin
+                           (set! memo-table (cons (cons x new-ans) memo-table))
+                           new-ans)))))]}))
+```
+
+## macros
+
+- **macro-definition** = description on how to transform new syntax into different syntax already in the language
+- **macro-system** = languages to define macros 
+- **macro-use** = using one of defined macros (replace the macro use with the appropriate syntax as defined by the macro definition  )
+- **macro-expansion** =converting the macro into actual readable code 
+
+```scheme
+; eg
+
+(define-syntax my-if
+	(syntax-rules (then else) ; anything not in is an exp
+		[(my-if e1 then e2 else e3)
+			(if e1 e2 e3)]))
+
+(my-if e1 then e2 else e3)
+(my-delay e)
+; might expand to
+(if e1 e2 e3)
+(mcons #f (lambda () e))
+```
+
+## datatype programming - working with structs
+
+3 parts are needed for our own **recursive datatypes**
+
+- access values
+- constructor
+- type-checker
+
+```scheme
+; helper functions for constructing
+(define (Const i) (list ’Const i))
+(define (Negate e) (list ’Negate e))
+(define (Add e1 e2) (list ’Add e1 e2))
+(define (Multiply e1 e2) (list ’Multiply e1 e2))
+; helper functions for testing
+(define (Const? x) (eq? (car x) ’Const))
+(define (Negate? x) (eq? (car x) ’Negate))
+(define (Add? x) (eq? (car x) ’Add))
+(define (Multiply? x) (eq? (car x) ’Multiply))
+; helper functions for accessing
+(define (Const-int e) (car (cdr e)))
+(define (Negate-e e) (car (cdr e)))
+(define (Add-e1 e) (car (cdr e)))
+(define (Add-e2 e) (car (cdr (cdr e))))
+(define (Multiply-e1 e) (car (cdr e)))
+(define (Multiply-e2 e) (car (cdr (cdr e))))
+
+; ’ is a symbol
+
+(define (eval-exp e)
+ (cond [(Const? e) e] ; note returning an exp, not a number
+  [(Negate? e) (Const (- (Const-int (eval-exp (Negate-e
+                                               e)))))]
+  [(Add? e) (let ([v1 (Const-int (eval-exp (Add-e1 e)))]
+  [v2 (Const-int (eval-exp (Add-e2 e)))])(Const (+ v1 v2)))]
+  [(Multiply? e) (let ([v1 (Const-int (eval-exp (Multiply-e1
+                                                 e)))]
+                       [v2 (Const-int (eval-exp (Multiply-e2
+                                                 e)))])
+                   (Const (* v1 v2)))]
+  [#t (error "eval-exp expected an exp")]))
+```
+
+> a **struct** will do a lot of scaffolding for us automatically
+>
+> - struct-id => constructor for type of constructor
+> - struct-id? => to check at run-time is it of type struct-id
+> - struct-id-field-id => to access a value from a field 
+>
+> a regular structure gives no constraints on type of data that can be used in fields --> if we want this use **contracts**
+>
+> two attributes for structl
+>
+> - transparent --> so that fields and accessor functions visible outside the module defining the struct. (big + allows the REPL to print struct values with their contents rather than just as an abstract value. )
+> - mutable --> makes all fields mutable by also providing mutator functions  (set-struct-id-field-id!)
+
+```scheme
+;(struct struct-id (field-id ...) <#:transparent> <#:mutable>)
+
+(struct const (int) #:transparent)
+(struct negate (e) #:transparent)
+(struct add (e1 e2) #:transparent)
+(struct multiply (e1 e2) #:transparent)
+```
+
+## how to - implement your own interpreter 
+
+ step by step language implementation:
+
+parser takes strings with syntax of program and checks for syntax errors --> creation of AST --> type check AST to check possible type-errors 
+
+<img src="C:\Users\henri\AppData\Roaming\Typora\typora-user-images\image-20200624085850870.png" alt="image-20200624085850870" style="zoom:50%;" />
+
+given a metalanguage A we have two options
+
+- interpreter = take code written in B use interpreter written in language A as executor for code coming from B
+- compiler = take code written in B use compiler written in language A to translate B into language C then use some pre-existing implementation of C 
+
+
+
+> an AST has to be legal --> we need to verify sub-expressions within the interpreter to see if the return type is correct 
+
+```scheme
+(struct const (int) #:transparent)
+(struct negate (e) #:transparent)
+(struct add (e1 e2) #:transparent)
+(struct multiply (e1 e2) #:transparent)
+(struct bool (b) #:transparent) ; b should hold #t or #f
+(struct if-then-else (e1 e2 e3) #:transparent) ; e1, e2, e3 should hold expressions
+(struct eq-num (e1 e2) #:transparent) ; e1, e2 should hold expressions
+
+(define (eval-exp e)
+  (cond [(const? e) 
+         e] 
+        [(negate? e) 
+         (let ([v (eval-exp (negate-e1 e))])
+           (if (const? v)
+               (const (- (const-int v)))
+               (error "negate applied to non-number")))]
+        [(add? e) 
+         (let ([v1 (eval-exp (add-e1 e))]
+               [v2 (eval-exp (add-e2 e))])
+           (if (and (const? v1) (const? v2))
+               (const (+ (const-int v1) (const-int v2)))
+               (error "add applied to non-number")))]
+        [(multiply? e) 
+         (let ([v1 (eval-exp (multiply-e1 e))]
+               [v2 (eval-exp (multiply-e2 e))])
+           (if (and (const? v1) (const? v2))
+               (const (* (const-int v1) (const-int v2)))
+               ((error "multiply applied to non-number"))))]
+        [(bool? e) 
+         e]
+        [(eq-num? e) 
+         (let ([v1 (eval-exp (eq-num-e1 e))]
+               [v2 (eval-exp (eq-num-e2 e))])
+           (if (and (const? v1) (const? v2))
+               (bool (= (const-int v1) (const-int v2))) ; creates (bool #t) or (bool #f)
+               (error "eq-num applied to non-number")))]
+        [(if-then-else? e) 
+         (let ([v-test (eval-exp (if-then-else-e1 e))])
+           (if (bool? v-test)
+               (if (bool-b v-test)
+                   (eval-exp (if-then-else-e2 e))
+                   (eval-exp (if-then-else-e3 e)))
+               (error "if-then-else applied to non-boolean")))]
+        [#t (error "eval-exp expected an exp")] ; not strictly necessary but helps debugging
+        ))
 ```
 
