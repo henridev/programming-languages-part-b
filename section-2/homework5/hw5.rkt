@@ -121,7 +121,7 @@ Remarks on logic
           [(aunit? e) e]
           [(fst? e) (handle-fst e)]
           [(snd? e) (handle-snd e)]
-          [(apair? e) (apair (eval-under-env (apair-e1 e) env) (eval-under-env (apair-e2 e) env))] 
+          [(apair? e) (handle-apair e)] 
           [(isaunit? e) (if (aunit? (eval-under-env (isaunit-e e) env)) (int 1) (int 0))]          [(var? e) (handle-var e)]
           [(add? e) (handle-add e)]
           [(ifgreater? e) (handle-is-greater e)]
@@ -147,7 +147,9 @@ Remarks on logic
 ; takes list of pairs
 (define (mlet* lstpairs e2) (if (empty? lstpairs)
                                e2 
-                               (mlet (car (car lstpairs)) (cdr (car lstpairs)) (mlet* (cdr lstpairs) e2))))
+                               (mlet (car (car lstpairs)) 
+                                     (cdr (car lstpairs)) 
+                                (mlet* (cdr lstpairs) e2))))
 
 
 
